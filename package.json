@@ -1,0 +1,25 @@
+{
+  "name": "app-store-kw-rv-eng",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nicolaischneider/app-store-kw-rv-eng.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/nicolaischneider/app-store-kw-rv-eng/issues"
+  },
+  "homepage": "https://github.com/nicolaischneider/app-store-kw-rv-eng#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.55.0",
+    "dotenv": "^17.0.0"
+  }
+}
