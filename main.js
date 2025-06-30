@@ -14,16 +14,13 @@ async function collectAppData(appId) {
   console.log(`🚀 Starting analysis for app ID: ${numericAppId}`);
   
   // Get app data from App Store
-  console.log('📱 Fetching app data...');
   const appData = await getAppData(numericAppId);
 
   // Get similar apps (limit to 3)
-  console.log('🔍 Fetching similar apps...');
   const allSimilarApps = await getSimilarApps(numericAppId);
   const top3SimilarApps = allSimilarApps.slice(0, 3);
 
   // Scrape app data for top 3 similar apps
-  console.log('📱 Scraping data for top 3 similar apps...');
   const similarAppsData = [];
   for (const similarApp of top3SimilarApps) {
     try {

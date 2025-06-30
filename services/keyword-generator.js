@@ -92,39 +92,18 @@ Use the generate_app_keywords function to return your response with the identifi
     ];
 
     // Add screenshot images to the content
-    console.log(`📸 Processing ${appData.screenshots.length} screenshots...`);
     for (const screenshot of appData.screenshots) {
       try {
-        let base64Image;
+        const imageData = await fetchImageAsBase64(screenshot);
         
-        // Check if screenshot is a URL or local path
-        if (screenshot.startsWith('http://') || screenshot.startsWith('https://')) {
-          console.log(`⬇️ Downloading image from URL: ${screenshot.substring(0, 50)}...`);
-          const imageData = await fetchImageAsBase64(screenshot);
-          console.log(`✅ Successfully downloaded and converted image to base64 (${imageData.mediaType})`);
-          
-          content.push({
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: imageData.mediaType,
-              data: imageData.base64
-            }
-          });
-        } else {
-          console.log(`📁 Reading local image file: ${screenshot}`);
-          const base64Image = readImageAsBase64(screenshot);
-          console.log(`✅ Successfully read and converted local image to base64`);
-          
-          content.push({
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: "image/jpeg",
-              data: base64Image
-            }
-          });
-        }
+        content.push({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: imageData.mediaType,
+            data: imageData.base64
+          }
+        });
       } catch (error) {
         console.warn(`⚠️ Failed to process screenshot: ${error.message}`);
       }
