@@ -9,7 +9,57 @@ const anthropic = new Anthropic({
 });
 
 /**
- * Reads and encodes image file to base64
+ * Downloads image from URL and converts to base64 with proper media type detection
+ * @param {string} imageUrl - URL of the image
+ * @returns {Promise<Object>} Object with base64 string and mediaType
+ */
+async function fetchImageAsBase64(imageUrl) {
+  try {
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Detect image format from Content-Type header or URL extension
+    let mediaType = 'image/jpeg'; // default
+    const contentType = response.headers.get('content-type');
+
+    if (contentType) {
+      if (contentType.includes('image/png')) {
+        mediaType = 'image/png';
+      } else if (contentType.includes('image/jpeg') || contentType.includes('image/jpg')) {
+        mediaType = 'image/jpeg';
+      } else if (contentType.includes('image/webp')) {
+        mediaType = 'image/webp';
+      } else if (contentType.includes('image/gif')) {
+        mediaType = 'image/gif';
+      }
+    } else {
+      // Fallback to URL extension
+      if (imageUrl.toLowerCase().includes('.png')) {
+        mediaType = 'image/png';
+      } else if (imageUrl.toLowerCase().includes('.webp')) {
+        mediaType = 'image/webp';
+      } else if (imageUrl.toLowerCase().includes('.gif')) {
+        mediaType = 'image/gif';
+      }
+    }
+
+    return {
+      base64: buffer.toString('base64'),
+      mediaType
+    };
+  } catch (error) {
+    console.error(`Error fetching image ${imageUrl}:`, error);
+    throw new Error(`Failed to fetch image: ${imageUrl}`);
+  }
+}
+
+/**
+ * Reads and encodes image file to base64 (for local files)
  * @param {string} imagePath - Path to the image file
  * @returns {string} Base64 encoded image data
  */
@@ -42,16 +92,42 @@ Use the generate_app_keywords function to return your response with the identifi
     ];
 
     // Add screenshot images to the content
-    for (const screenshotPath of appData.screenshots) {
-      const base64Image = readImageAsBase64(screenshotPath);
-      content.push({
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: "image/jpeg",
-          data: base64Image
+    console.log(`📸 Processing ${appData.screenshots.length} screenshots...`);
+    for (const screenshot of appData.screenshots) {
+      try {
+        let base64Image;
+        
+        // Check if screenshot is a URL or local path
+        if (screenshot.startsWith('http://') || screenshot.startsWith('https://')) {
+          console.log(`⬇️ Downloading image from URL: ${screenshot.substring(0, 50)}...`);
+          const imageData = await fetchImageAsBase64(screenshot);
+          console.log(`✅ Successfully downloaded and converted image to base64 (${imageData.mediaType})`);
+          
+          content.push({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: imageData.mediaType,
+              data: imageData.base64
+            }
+          });
+        } else {
+          console.log(`📁 Reading local image file: ${screenshot}`);
+          const base64Image = readImageAsBase64(screenshot);
+          console.log(`✅ Successfully read and converted local image to base64`);
+          
+          content.push({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: "image/jpeg",
+              data: base64Image
+            }
+          });
         }
-      });
+      } catch (error) {
+        console.warn(`⚠️ Failed to process screenshot: ${error.message}`);
+      }
     }
 
     // Call Claude Sonnet API with images and function tools

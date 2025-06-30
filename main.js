@@ -1,4 +1,5 @@
 const { getAppData, getSimilarApps } = require('./services/app-store-scraper');
+const { generateKeywords } = require('./services/keyword-generator');
 
 /**
  * Collects app data and similar apps, then logs the main app
@@ -41,17 +42,36 @@ async function collectAppData(appId) {
 }
 
 /**
+ * Generates keywords for main app only
+ */
+async function generateAppKeywords(appData) {
+  console.log('\n🧠 Generating keywords for main app...');
+  const mainAppKeywords = await generateKeywords(appData);
+  
+  console.log(`✅ Generated keywords for ${appData.title}:`);
+  console.log(mainAppKeywords.keywords.join(', '));
+  
+  return {
+    mainAppKeywords: mainAppKeywords.keywords
+  };
+}
+
+/**
  * Main entry function for app analysis
  * @param {string|number} appId - The app ID (must be numeric)
  */
 async function analyzeApp(appId) {
   try {
-    // Collect app data and similar apps, then log
+    // Step 1: Collect app data and similar apps, then log
     const { appData, similarApps } = await collectAppData(appId);
+
+    // Step 2: Generate keywords for main app only
+    const { mainAppKeywords } = await generateAppKeywords(appData);
 
     return {
       appData,
-      similarApps
+      similarApps,
+      mainAppKeywords
     };
 
   } catch (error) {
