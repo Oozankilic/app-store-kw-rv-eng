@@ -1,5 +1,6 @@
 const { getAppData, getSimilarApps } = require('./services/app-store-scraper');
 const { generateKeywords } = require('./services/keyword-generator');
+const { ASOAnalyzer } = require('./services/aso-analyzer');
 
 /**
  * Collects app data and similar apps, then logs the main app
@@ -39,18 +40,63 @@ async function collectAppData(appId) {
 }
 
 /**
- * Generates keywords for main app only
+ * Generates keywords for main app and similar apps
  */
-async function generateAppKeywords(appData) {
+async function generateAppKeywords(appData, similarApps) {
   console.log('\n🧠 Generating keywords for main app...');
   const mainAppKeywords = await generateKeywords(appData);
   
   console.log(`✅ Generated keywords for ${appData.title}:`);
   console.log(mainAppKeywords.keywords.join(', '));
   
+  console.log('\n🧠 Generating keywords for similar apps...');
+  const similarAppKeywords = [];
+  for (const similarApp of similarApps) {
+    try {
+      const keywords = await generateKeywords(similarApp);
+      similarAppKeywords.push(...keywords.keywords);
+      console.log(`✅ Generated keywords for ${similarApp.title}:`);
+      console.log(keywords.keywords.join(', '));
+    } catch (error) {
+      console.warn(`⚠️ Failed to generate keywords for ${similarApp.title}: ${error.message}`);
+    }
+  }
+  
   return {
-    mainAppKeywords: mainAppKeywords.keywords
+    mainAppKeywords: mainAppKeywords.keywords,
+    similarAppKeywords: similarAppKeywords,
+    allKeywords: [...mainAppKeywords.keywords, ...similarAppKeywords]
   };
+}
+
+/**
+ * Analyzes 5 random keywords with ASO metrics
+ */
+async function analyzeRandomKeywords(allKeywords) {
+  // Shuffle array and take 5 random keywords
+  const shuffled = [...allKeywords].sort(() => 0.5 - Math.random());
+  const random5Keywords = shuffled.slice(0, 5);
+  
+  console.log('\n📊 Analyzing 5 random keywords with ASO...');
+  
+  const asoAnalyzer = new ASOAnalyzer('itunes');
+  const results = [];
+  
+  for (const keyword of random5Keywords) {
+    try {
+      const analysis = await asoAnalyzer.analyzeKeyword(keyword);
+      results.push({
+        keyword,
+        traffic: analysis.trafficScore,
+        difficulty: analysis.difficultyScore
+      });
+      console.log(`- ${keyword} | traffic: ${analysis.trafficScore} | difficulty: ${analysis.difficultyScore}`);
+    } catch (error) {
+      console.warn(`⚠️ Failed to analyze keyword "${keyword}": ${error.message}`);
+    }
+  }
+  
+  return results;
 }
 
 /**
@@ -62,13 +108,19 @@ async function analyzeApp(appId) {
     // Step 1: Collect app data and similar apps, then log
     const { appData, similarApps } = await collectAppData(appId);
 
-    // Step 2: Generate keywords for main app only
-    const { mainAppKeywords } = await generateAppKeywords(appData);
+    // Step 2: Generate keywords for main app and similar apps
+    const { mainAppKeywords, similarAppKeywords, allKeywords } = await generateAppKeywords(appData, similarApps);
+
+    // Step 3: Analyze 5 random keywords from all keywords with ASO
+    const keywordAnalysis = await analyzeRandomKeywords(allKeywords);
 
     return {
       appData,
       similarApps,
-      mainAppKeywords
+      mainAppKeywords,
+      similarAppKeywords,
+      allKeywords,
+      keywordAnalysis
     };
 
   } catch (error) {
