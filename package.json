@@ -20,6 +20,7 @@
   "homepage": "https://github.com/nicolaischneider/app-store-kw-rv-eng#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.55.0",
+    "app-store-scraper": "^0.18.0",
     "aso-v2": "^2.0.14",
     "dotenv": "^17.0.0"
   }
