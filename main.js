@@ -100,6 +100,125 @@ async function analyzeRandomKeywords(allKeywords) {
 }
 
 /**
+ * Analyzes a single keyword with error handling for parallel processing
+ * @param {string} keyword - Keyword to analyze
+ * @param {ASOAnalyzer} asoAnalyzer - ASO analyzer instance
+ * @returns {Promise<Object>} Analysis result
+ */
+async function analyzeKeywordParallel(keyword, asoAnalyzer) {
+  try {
+    console.log(`📊 Analyzing: "${keyword}"`);
+    const analysis = await asoAnalyzer.analyzeKeyword(keyword);
+    return {
+      keyword: analysis.keyword,
+      trafficScore: analysis.trafficScore,
+      difficultyScore: analysis.difficultyScore,
+      competitionLevel: analysis.competitionLevel,
+      trafficLevel: analysis.trafficLevel,
+      recommendation: analysis.recommendation
+    };
+  } catch (error) {
+    console.warn(`⚠️ Failed to analyze keyword "${keyword}": ${error.message}`);
+    return {
+      keyword,
+      trafficScore: 0,
+      difficultyScore: 0,
+      competitionLevel: 'unknown',
+      trafficLevel: 'unknown',
+      recommendation: 'analysis_failed',
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Processes keywords in parallel batches to avoid overwhelming the API
+ * @param {Array<string>} keywords - Keywords to analyze
+ * @param {ASOAnalyzer} asoAnalyzer - ASO analyzer instance
+ * @param {number} batchSize - Number of concurrent requests (default: 3)
+ * @returns {Promise<Array<Object>>} Analysis results
+ */
+async function processKeywordsBatch(keywords, asoAnalyzer, batchSize = 3) {
+  const results = [];
+  
+  for (let i = 0; i < keywords.length; i += batchSize) {
+    const batch = keywords.slice(i, i + batchSize);
+    console.log(`\n🚀 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(keywords.length / batchSize)} (${batch.length} keywords)`);
+    
+    // Process batch in parallel
+    const batchPromises = batch.map(keyword => analyzeKeywordParallel(keyword, asoAnalyzer));
+    const batchResults = await Promise.all(batchPromises);
+    
+    results.push(...batchResults);
+    
+    // Small delay between batches to be respectful to the API
+    if (i + batchSize < keywords.length) {
+      console.log('⏳ Waiting 1 second before next batch...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  
+  return results;
+}
+
+/**
+ * Searches and analyzes comma-separated keywords with ASO metrics (parallelized)
+ * @param {string} keywordsString - Comma-separated keywords string
+ * @param {number} concurrency - Number of concurrent requests per batch (default: 3)
+ */
+async function searchKeywords(keywordsString, concurrency = 3) {
+  // Parse comma-separated keywords and clean them
+  const keywords = keywordsString
+    .split(',')
+    .map(keyword => keyword.trim())
+    .filter(keyword => keyword.length > 0);
+  
+  if (keywords.length === 0) {
+    console.error('❌ No valid keywords provided');
+    return [];
+  }
+  
+  console.log(`🔍 Searching and analyzing ${keywords.length} keywords on itunes (${concurrency} concurrent):`);
+  keywords.forEach(keyword => console.log(`  - "${keyword}"`));
+  
+  const asoAnalyzer = new ASOAnalyzer('itunes');
+  const startTime = Date.now();
+  
+  // Process keywords in parallel batches
+  const results = await processKeywordsBatch(keywords, asoAnalyzer, concurrency);
+  
+  const endTime = Date.now();
+  const duration = ((endTime - startTime) / 1000).toFixed(1);
+  
+  // Sort results: traffic score descending, then difficulty score ascending
+  results.sort((a, b) => {
+    if (b.trafficScore !== a.trafficScore) {
+      return b.trafficScore - a.trafficScore; // Higher traffic first
+    }
+    return a.difficultyScore - b.difficultyScore; // Lower difficulty first
+  });
+  
+  // Display sorted results
+  console.log('\n📈 Results sorted by traffic score (desc) → difficulty score (asc):');
+  console.log('─'.repeat(80));
+  console.log('Keyword'.padEnd(25) + 'Traffic'.padEnd(10) + 'Difficulty'.padEnd(12) + 'Recommendation');
+  console.log('─'.repeat(80));
+  
+  results.forEach(result => {
+    const keyword = result.keyword.padEnd(25);
+    const traffic = result.trafficScore.toString().padEnd(10);
+    const difficulty = result.difficultyScore.toString().padEnd(12);
+    const recommendation = result.recommendation;
+    console.log(`${keyword}${traffic}${difficulty}${recommendation}`);
+  });
+  
+  console.log('─'.repeat(80));
+  console.log(`\n✅ Analysis complete! Analyzed ${results.length} keywords in ${duration}s`);
+  
+  return results;
+}
+
+/**
  * Main entry function for app analysis
  * @param {string|number} appId - The app ID (must be numeric)
  */
@@ -131,19 +250,68 @@ async function analyzeApp(appId) {
 
 // Export for use in other modules
 module.exports = {
-  analyzeApp
+  analyzeApp,
+  searchKeywords
 };
 
-// If run directly, get app ID from command line arguments
+// If run directly, handle command line arguments
 if (require.main === module) {
-  const appId = process.argv[2];
+  const args = process.argv.slice(2);
   
-  if (!appId) {
-    console.error('❌ Please provide an app ID as argument');
-    console.log('Usage: node main.js <appId>');
-    console.log('Example: node main.js 310633997');
+  if (args.length === 0) {
+    console.error('❌ Please provide arguments');
+    console.log('Usage:');
+    console.log('  node main.js <appId>                    - Analyze an app');
+    console.log('  node main.js -search "keyword1,keyword2" - Search keywords');
+    console.log('');
+    console.log('Examples:');
+    console.log('  node main.js 310633997');
+    console.log('  node main.js -search "AI photo editor,AI image editor,photo editor,photo editing"');
     process.exit(1);
   }
+  
+  // Handle -search command
+  if (args[0] === '-search') {
+    if (!args[1]) {
+      console.error('❌ Please provide keywords after -search');
+      console.log('Usage: node main.js -search "keyword1,keyword2,keyword3" [concurrency]');
+      console.log('Examples:');
+      console.log('  node main.js -search "AI photo editor,AI image editor,photo editor,photo editing"');
+      console.log('  node main.js -search "keywords..." 5');
+      console.log('  node main.js -search "keywords..." 10');
+      process.exit(1);
+    }
+    
+    const keywordsString = args[1];
+    const concurrency = parseInt(args[2]) || 3; // Optional concurrency parameter
+    
+    // Validate concurrency
+    if (concurrency < 1 || concurrency > 20) {
+      console.error('❌ Concurrency must be between 1 and 20');
+      process.exit(1);
+    }
+    
+    searchKeywords(keywordsString, concurrency).catch(error => {
+      console.error('❌ Search failed:', error.message);
+      process.exit(1);
+    });
+  }
+  // Handle regular app analysis
+  else {
+    const appId = args[0];
+    
+    // Validate app ID is numeric
+    const numericAppId = parseInt(appId, 10);
+    if (isNaN(numericAppId) || numericAppId <= 0) {
+      console.error('❌ App ID must be a valid numeric value');
+      console.log('Usage: node main.js <appId>');
+      console.log('Example: node main.js 310633997');
+      process.exit(1);
+    }
 
-  analyzeApp(appId);
+    analyzeApp(appId).catch(error => {
+      console.error('❌ Analysis failed:', error.message);
+      process.exit(1);
+    });
+  }
 }
